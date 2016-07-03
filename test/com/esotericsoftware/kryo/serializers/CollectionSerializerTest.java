@@ -7,6 +7,7 @@ import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.function.IntFunction;
 
 import org.junit.Test;
 
@@ -25,57 +26,51 @@ public class CollectionSerializerTest {
 		Kryo k1 = new Kryo();
 		k1.register(ArrayList.class, new NewCollectionSerializer());
 		
-		ArrayList<Object> l=new ArrayList<>();
-		for(int i=0;i<40;i++) {
-			System.out.println("All equal length "+i+"\t\t"+ 					(countObjectBytes(k,l)-countObjectBytes(k1,l)));
-			//System.out.println(Arrays.toString(getObjectBytes(k,l)));
-			//System.out.println(Arrays.toString(getObjectBytes(k1,l)));
-			Assert.assertEquals(writeReadObject(k,l), writeReadObject(k1,l));
-			l.add(new ElementA(i));
+		System.out.print("| List Size");
+		for(Mode mode:Mode.values()) {
+			System.out.print(" | "+mode.name());
 		}
-		
-		l.clear();
-		for(int i=0;i<40;i++) {
-			System.out.println("All null length "+i+"\t\t"+ 					(countObjectBytes(k,l)-countObjectBytes(k1,l)));
-			l.add(null);
+		System.out.println(" |");
+		System.out.print("| ---:");
+		for(Mode mode:Mode.values()) {
+			System.out.print(" | ---:");
 		}
+		System.out.println(" |");
 		
-		l.clear();
-		for(int i=0;i<40;i++) {
-			System.out.println("mixed null length "+i+"\t\t"+ 					(countObjectBytes(k,l)-countObjectBytes(k1,l)));
-			l.add(i%2==0 ? null : new ElementA(i));
+		for(int size:new int[]{1,2,3,4,5,6,7,8,9,10,100,1000,10000,10000,100000}) {
+			System.out.print("| "+size);
+			for(Mode mode:Mode.values()) {
+				ArrayList<Object> l=new ArrayList<>();
+				for(int i=0;i<size;i++)
+					l.add(mode.value(i));
+
+				System.out.print(" | "+(countObjectBytes(k1,l)*100/countObjectBytes(k,l)-100)+"%");
+				
+				long normalTime=-System.nanoTime();
+				for(int i=0;i<1000;i++) {
+					writeReadObject(k, l);
+				}
+				normalTime+=System.nanoTime();
+				long newTime=-System.nanoTime();
+				for(int i=0;i<1000;i++) {
+					writeReadObject(k1, l);
+				}
+				newTime+=System.nanoTime();
+				//do it again to counter JIT optimizations
+				normalTime=-System.nanoTime();
+				for(int i=0;i<1000;i++) {
+					writeReadObject(k, l);
+				}
+				normalTime+=System.nanoTime();
+				newTime=-System.nanoTime();
+				for(int i=0;i<1000;i++) {
+					writeReadObject(k1, l);
+				}
+				newTime+=System.nanoTime();
+				System.out.print(" / "+(newTime*100/normalTime-100)+"%");
+			}
+			System.out.println(" |");
 		}
-		
-		l.clear();
-		for(int i=0;i<40;i++) {
-			System.out.println("non-null mixed classes length "+i+"\t\t"+ 	(countObjectBytes(k,l)-countObjectBytes(k1,l)));
-			l.add(i%2==0 ? new ElementB(i) : new ElementA(i));
-		}
-		
-		l.clear();
-		for(int i=0;i<40;i++) {
-			System.out.println("mixed null mixed classes length "+i+"\t\t"+(countObjectBytes(k,l)-countObjectBytes(k1,l)));
-			l.add(i%3==0 ? new ElementB(i) : (i%3==1 ? new ElementA(i) : null));
-		}
-		
-		
-		
-		l.clear();
-		for(int i=0;i<500;i++) {
-			l.add(new ElementA(i));
-		}
-		
-		long normalTime=-System.nanoTime();
-		for(int i=0;i<100;i++) {
-			writeReadObject(k, l);
-		}
-		normalTime+=System.nanoTime();
-		long newTime=-System.nanoTime();
-		for(int i=0;i<100;i++) {
-			writeReadObject(k1, l);
-		}
-		newTime+=System.nanoTime();
-		System.out.println("Time: "+normalTime+" -> "+newTime);
 	}
 	
 	private Object writeReadObject (Kryo k, Object o) {
@@ -174,5 +169,46 @@ public class CollectionSerializerTest {
 		public String toString () {
 			return "B["+i+"]";
 		}
+	}
+	
+	private static enum Mode {
+		
+		SAME_CLASS_NO_NULL {
+			@Override
+			public Object value (int id) {
+				return new ElementA(id);
+			}
+		},
+		SAME_CLASS_NULL {
+			@Override
+			public Object value (int id) {
+				return id%2==0 ? new ElementA(id) : null;
+			}
+		},
+		MIXED_CLASS_NO_NULL {
+			@Override
+			public Object value (int id) {
+				return id%2==0 ? new ElementA(id) : new ElementB(id);
+			}
+		},
+		MIXED_CLASS_NULL {
+			@Override
+			public Object value (int id) {
+				if(id%3==0)
+					return new ElementA(id);
+				else if(id%3==1)
+					return new ElementB(id);
+				else
+					return null;
+			}
+		},
+		ONLY_NULL {
+			@Override
+			public Object value (int id) {
+				return null;
+			}
+		};
+		
+		public abstract Object value(int id);
 	}
 }

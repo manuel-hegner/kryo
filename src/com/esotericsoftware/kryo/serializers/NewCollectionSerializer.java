@@ -26,6 +26,7 @@ import java.lang.annotation.Target;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Iterator;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.Registration;
@@ -152,8 +153,8 @@ public class NewCollectionSerializer extends Serializer<Collection> {
 
 	private CollectionInfo collectInfo (Collection collection) {
 		CollectionInfo info = new CollectionInfo();
-		for(Object o:collection)
-			info.add(o);
+		Iterator it = collection.iterator();
+		while(it.hasNext() && info.add(it.next()));
 		return info;
 	}
 
@@ -292,7 +293,7 @@ public class NewCollectionSerializer extends Serializer<Collection> {
 		
 		public CollectionInfo () {}
 
-		public void add(Object o) {
+		public boolean add(Object o) {
 			if(o == null)
 				anyNull = true;
 			else {
@@ -304,6 +305,8 @@ public class NewCollectionSerializer extends Serializer<Collection> {
 				}
 				allNull=false;
 			}
+			
+			return allNull || singularClass!=null;
 		}
 	}
 }
