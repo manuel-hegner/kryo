@@ -57,6 +57,25 @@ public class CollectionSerializerTest {
 			System.out.println("mixed null mixed classes length "+i+"\t\t"+(countObjectBytes(k,l)-countObjectBytes(k1,l)));
 			l.add(i%3==0 ? new ElementB(i) : (i%3==1 ? new ElementA(i) : null));
 		}
+		
+		
+		
+		l.clear();
+		for(int i=0;i<500;i++) {
+			l.add(new ElementA(i));
+		}
+		
+		long normalTime=-System.nanoTime();
+		for(int i=0;i<100;i++) {
+			writeReadObject(k, l);
+		}
+		normalTime+=System.nanoTime();
+		long newTime=-System.nanoTime();
+		for(int i=0;i<100;i++) {
+			writeReadObject(k1, l);
+		}
+		newTime+=System.nanoTime();
+		System.out.println("Time: "+normalTime+" -> "+newTime);
 	}
 	
 	private Object writeReadObject (Kryo k, Object o) {
