@@ -48,18 +48,18 @@ public class V4CollectionSerializerTest extends KryoTestCase {
 	public void testDifferentTypesNoNull() {
 		List<Number> l = Arrays.asList(5,3,835,3853.5D,384,384,34F,9385,2394,364923,52935,923,5923,593,59135);
 		
-		roundTrip(58, 82, new ArrayList<>(l));
-		roundTrip(58, 82, new LinkedList<>(l));
-		roundTrip(55, 77, new HashSet<>(l));
+		roundTrip(57, 81, new ArrayList<>(l));
+		roundTrip(57, 81, new LinkedList<>(l));
+		roundTrip(54, 76, new HashSet<>(l));
 	}
 	
 	@Test
 	public void testDifferentTypesNull() {
 		List<Number> l = Arrays.asList(5,null,835,3853.5D,384,384,34F,null,2394,364923,null,923,5923,593,59135);
 		
-		roundTrip(51, 70, new ArrayList<>(l));
-		roundTrip(51, 70, new LinkedList<>(l));
-		roundTrip(46, 63, new HashSet<>(l));
+		roundTrip(50, 69, new ArrayList<>(l));
+		roundTrip(50, 69, new LinkedList<>(l));
+		roundTrip(45, 62, new HashSet<>(l));
 	}
 	
 	@Test

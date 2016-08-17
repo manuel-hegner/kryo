@@ -314,7 +314,15 @@ public class Output extends OutputStream {
 		buffer[position++] = (byte)(value >>> 28);
 		return 5;
 	}
-
+	
+	/** Writes a flag and an int in 1-6 bytes. It is guaranteed that a varible length encoding will be used.
+	 * 
+	 * @param optimizePositive If true, small positive numbers will be more efficient (1 byte) and small negative numbers will be
+	 *           inefficient (6 bytes). */
+	public int writeFlagAndVarInt (boolean flag, int value, boolean optimizePositive) throws KryoException {
+		return writeVarLong(value*2L+(flag?1L:0L), optimizePositive);
+	}
+	
 	// string
 
 	/** Writes the length and string, or null. Short strings are checked and if ASCII they are written more efficiently, else they

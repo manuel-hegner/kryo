@@ -34,6 +34,7 @@ import com.esotericsoftware.kryo.Serializer;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.util.CollectionInformation;
+import com.esotericsoftware.kryo.util.FlagAndInt;
 
 /** Serializes objects that implement the {@link Collection} interface.
  * <p>
@@ -87,8 +88,18 @@ public class V4CollectionSerializer extends Serializer<Collection> {
 		int length = collection.size();
 		
 		CollectionInformation info = CollectionInformation.gather(collection);
-		output.writeVarInt(length, true);
-		output.writeByte(info.toByte());
+		
+		if((info.isMultipleClasses() && !info.isAllNull()) || //no special case at all
+			(info.isAllNull() && length<1) || (!info.isAllNull() && info.isAnyNull() && length<5)) { //special case but meta information is too expensive if small collection
+		
+			output.writeFlagAndVarInt(false, length, true);
+			info=CollectionInformation.NO_SPECIAL_CASE;
+		}
+		else {
+			output.writeFlagAndVarInt(true, length, true);
+			output.writeByte(info.toByte());
+		}
+		
 		
 		if(!info.isAllNull()) {
 			
@@ -127,8 +138,13 @@ public class V4CollectionSerializer extends Serializer<Collection> {
 	public Collection read (Kryo kryo, Input input, Class<Collection> type) {
 		Collection collection = create(kryo, input, type);
 		kryo.reference(collection);
-		int length = input.readVarInt(true);
-		CollectionInformation info = new CollectionInformation(input.readByte());
+		FlagAndInt fai = input.readFlagAndVarInt(true);
+		int length = fai.getIntValue();
+		CollectionInformation info;
+		if(fai.isFlag())
+			info = new CollectionInformation(input.readByte());
+		else
+			info = CollectionInformation.NO_SPECIAL_CASE;
 		
 		if(info.isAllNull())
 			collection.addAll(Arrays.asList(new Object[length]));

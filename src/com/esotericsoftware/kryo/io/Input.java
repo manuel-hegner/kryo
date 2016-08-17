@@ -20,6 +20,7 @@
 package com.esotericsoftware.kryo.io;
 
 import com.esotericsoftware.kryo.KryoException;
+import com.esotericsoftware.kryo.util.FlagAndInt;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -392,7 +393,15 @@ public class Input extends InputStream {
 		}
 		return optimizePositive ? result : ((result >>> 1) ^ -(result & 1));
 	}
-
+	
+	/** Reads a flag and an int in 1-6 bytes.
+	 * @param optimizePositive If true, small positive numbers will be more efficient (1 byte) and small negative numbers will be
+	 *           inefficient (6 bytes). */
+	public FlagAndInt readFlagAndVarInt (boolean optimizePositive) {
+		long v = readVarLong(optimizePositive);
+		return new FlagAndInt((int)(v/2),(v&0x1)==0x1);
+	}
+	
 	private int readInt_slow (boolean optimizePositive) {
 		// The buffer is guaranteed to have at least 1 byte.
 		int b = buffer[position++];
