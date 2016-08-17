@@ -160,20 +160,41 @@ public class Kryo {
 	public Kryo () {
 		this(new DefaultClassResolver(), new MapReferenceResolver(), new DefaultStreamFactory());
 	}
+	
+	/** Creates a new Kryo with a {@link DefaultClassResolver} and a {@link MapReferenceResolver}. */
+	public Kryo (SerializerSet serializerSet) {
+		this(serializerSet, new DefaultClassResolver(), new MapReferenceResolver(), new DefaultStreamFactory());
+	}
 
 	/** Creates a new Kryo with a {@link DefaultClassResolver}.
 	 * @param referenceResolver May be null to disable references. */
 	public Kryo (ReferenceResolver referenceResolver) {
 		this(new DefaultClassResolver(), referenceResolver, new DefaultStreamFactory());
 	}
+	
+	/** Creates a new Kryo with a {@link DefaultClassResolver}.
+	 * @param referenceResolver May be null to disable references. */
+	public Kryo (SerializerSet serializerSet, ReferenceResolver referenceResolver) {
+		this(serializerSet, new DefaultClassResolver(), referenceResolver, new DefaultStreamFactory());
+	}
 
 	/** @param referenceResolver May be null to disable references. */
 	public Kryo (ClassResolver classResolver, ReferenceResolver referenceResolver) {
 		this(classResolver, referenceResolver, new DefaultStreamFactory());
 	}
+	
+	/** @param referenceResolver May be null to disable references. */
+	public Kryo (SerializerSet serializerSet, ClassResolver classResolver, ReferenceResolver referenceResolver) {
+		this(serializerSet, classResolver, referenceResolver, new DefaultStreamFactory());
+	}
 
 	/** @param referenceResolver May be null to disable references. */
 	public Kryo (ClassResolver classResolver, ReferenceResolver referenceResolver, StreamFactory streamFactory) {
+		this(SerializerSet.V3, classResolver, referenceResolver, streamFactory);
+	}
+	
+	/** @param referenceResolver May be null to disable references. */
+	public Kryo (SerializerSet serializerSet, ClassResolver classResolver, ReferenceResolver referenceResolver, StreamFactory streamFactory) {
 		if (classResolver == null) throw new IllegalArgumentException("classResolver cannot be null.");
 
 		this.classResolver = classResolver;
@@ -188,43 +209,7 @@ public class Kryo {
 			references = true;
 		}
 
-		addDefaultSerializer(byte[].class, ByteArraySerializer.class);
-		addDefaultSerializer(char[].class, CharArraySerializer.class);
-		addDefaultSerializer(short[].class, ShortArraySerializer.class);
-		addDefaultSerializer(int[].class, IntArraySerializer.class);
-		addDefaultSerializer(long[].class, LongArraySerializer.class);
-		addDefaultSerializer(float[].class, FloatArraySerializer.class);
-		addDefaultSerializer(double[].class, DoubleArraySerializer.class);
-		addDefaultSerializer(boolean[].class, BooleanArraySerializer.class);
-		addDefaultSerializer(String[].class, StringArraySerializer.class);
-		addDefaultSerializer(Object[].class, ObjectArraySerializer.class);
-		addDefaultSerializer(KryoSerializable.class, KryoSerializableSerializer.class);
-		addDefaultSerializer(BigInteger.class, BigIntegerSerializer.class);
-		addDefaultSerializer(BigDecimal.class, BigDecimalSerializer.class);
-		addDefaultSerializer(Class.class, ClassSerializer.class);
-		addDefaultSerializer(Date.class, DateSerializer.class);
-		addDefaultSerializer(Enum.class, EnumSerializer.class);
-		addDefaultSerializer(EnumSet.class, EnumSetSerializer.class);
-		addDefaultSerializer(Currency.class, CurrencySerializer.class);
-		addDefaultSerializer(StringBuffer.class, StringBufferSerializer.class);
-		addDefaultSerializer(StringBuilder.class, StringBuilderSerializer.class);
-		addDefaultSerializer(Collections.EMPTY_LIST.getClass(), CollectionsEmptyListSerializer.class);
-		addDefaultSerializer(Collections.EMPTY_MAP.getClass(), CollectionsEmptyMapSerializer.class);
-		addDefaultSerializer(Collections.EMPTY_SET.getClass(), CollectionsEmptySetSerializer.class);
-		addDefaultSerializer(Collections.singletonList(null).getClass(), CollectionsSingletonListSerializer.class);
-		addDefaultSerializer(Collections.singletonMap(null, null).getClass(), CollectionsSingletonMapSerializer.class);
-		addDefaultSerializer(Collections.singleton(null).getClass(), CollectionsSingletonSetSerializer.class);
-		addDefaultSerializer(TreeSet.class, TreeSetSerializer.class);
-		addDefaultSerializer(Collection.class, CollectionSerializer.class);
-		addDefaultSerializer(TreeMap.class, TreeMapSerializer.class);
-		addDefaultSerializer(Map.class, MapSerializer.class);
-		addDefaultSerializer(TimeZone.class, TimeZoneSerializer.class);
-		addDefaultSerializer(Calendar.class, CalendarSerializer.class);
-		addDefaultSerializer(Locale.class, LocaleSerializer.class);
-		addDefaultSerializer(Charset.class, CharsetSerializer.class);
-		addDefaultSerializer(URL.class, URLSerializer.class);
-		OptionalSerializers.addDefaultSerializers(this);
-		TimeSerializers.addDefaultSerializers(this);
+		serializerSet.addDefaultSerializers(this);
 		lowPriorityDefaultSerializerCount = defaultSerializers.size();
 
 		// Primitives and string. Primitive wrappers automatically use the same registration as primitives.

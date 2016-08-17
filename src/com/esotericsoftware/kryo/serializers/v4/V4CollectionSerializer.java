@@ -17,7 +17,7 @@
  * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 
-package com.esotericsoftware.kryo.serializers;
+package com.esotericsoftware.kryo.serializers.v4;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -33,6 +33,7 @@ import com.esotericsoftware.kryo.Registration;
 import com.esotericsoftware.kryo.Serializer;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import com.esotericsoftware.kryo.util.CollectionInformation;
 
 /** Serializes objects that implement the {@link Collection} interface.
  * <p>
@@ -40,23 +41,23 @@ import com.esotericsoftware.kryo.io.Output;
  * collection. The alternate constructor can be used to improve efficiency to match that of using an array instead of a
  * collection.
  * @author Nathan Sweet <misc@n4te.com> */
-public class NewCollectionSerializer extends Serializer<Collection> {
+public class V4CollectionSerializer extends Serializer<Collection> {
 	private boolean elementsCanBeNull = true;
 	private Serializer serializer;
 	private Class elementClass;
 	private Class genericType;
 
-	public NewCollectionSerializer () {
+	public V4CollectionSerializer () {
 	}
 
 	/** @see #setElementClass(Class, Serializer) */
-	public NewCollectionSerializer (Class elementClass, Serializer serializer) {
+	public V4CollectionSerializer (Class elementClass, Serializer serializer) {
 		setElementClass(elementClass, serializer);
 	}
 
 	/** @see #setElementClass(Class, Serializer)
 	 * @see #setElementsCanBeNull(boolean) */
-	public NewCollectionSerializer (Class elementClass, Serializer serializer, boolean elementsCanBeNull) {
+	public V4CollectionSerializer (Class elementClass, Serializer serializer, boolean elementsCanBeNull) {
 		setElementClass(elementClass, serializer);
 		this.elementsCanBeNull = elementsCanBeNull;
 	}
@@ -85,77 +86,36 @@ public class NewCollectionSerializer extends Serializer<Collection> {
 	public void write (Kryo kryo, Output output, Collection collection) {
 		int length = collection.size();
 		
-		if(collection.size()>3) {
-			CollectionInfo info = collectInfo(collection);
-			writeSpecial(kryo, output, collection, length, info);
-		}
-		else
-			writeGeneric(kryo, output, collection, length);
-	}
-
-	private void writeSpecial (Kryo kryo, Output output, Collection collection, int length, CollectionInfo info) {
-		if((info.singularClass==null && !info.allNull) || //no special case at all
-			(info.allNull && length<5) || (!info.allNull && info.anyNull && length<8)) { //special case but meta information is too expensive if small collection
-			writeGeneric(kryo, output, collection, length);
-		}
-		else {
-			output.writeVarInt(-length, true);
-			output.writeByte((info.allNull?1:0) | (info.anyNull?2:0) | (info.singularClass!=null?4:0));	//write special info
+		CollectionInformation info = CollectionInformation.gather(collection);
+		output.writeVarInt(length, true);
+		output.writeByte(info.toByte());
+		
+		if(!info.isAllNull()) {
 			
-			if(!info.allNull) {
-				Serializer serializer = this.serializer;
-				if (genericType != null) {
-					if (serializer == null) serializer = kryo.getSerializer(genericType);
-					genericType = null;
+			Serializer serializer = this.serializer;
+			if (genericType != null) {
+				if (serializer == null) serializer = kryo.getSerializer(genericType);
+				genericType = null;
+			}
+			if(!info.isMultipleClasses()) {
+				if (serializer == null) {
+					serializer = kryo.getSerializer(info.getSingularClass());
+					kryo.writeClass(output, info.getSingularClass());
 				}
-				if(info.singularClass!=null) {
-					if (serializer == null) {
-						serializer = kryo.getSerializer(info.singularClass);
-						kryo.writeClass(output, info.singularClass);
-					}
-				}
-				if (serializer != null) {
-					if (elementsCanBeNull && info.anyNull) {
-						for (Object element : collection)
-							kryo.writeObjectOrNull(output, element, serializer);
-					} else {
-						for (Object element : collection)
-							kryo.writeObject(output, element, serializer);
-					}
+			}
+			if (serializer != null) {
+				if (elementsCanBeNull && info.isAnyNull()) {
+					for (Object element : collection)
+						kryo.writeObjectOrNull(output, element, serializer);
 				} else {
 					for (Object element : collection)
-						kryo.writeClassAndObject(output, element);
+						kryo.writeObject(output, element, serializer);
 				}
-			}
-		}
-	}
-
-	private void writeGeneric (Kryo kryo, Output output, Collection collection, int length) {
-		output.writeVarInt(length, true);
-		Serializer serializer = this.serializer;
-		if (genericType != null) {
-			if (serializer == null) serializer = kryo.getSerializer(genericType);
-			genericType = null;
-		}
-		if (serializer != null) {
-			if (elementsCanBeNull) {
-				for (Object element : collection)
-					kryo.writeObjectOrNull(output, element, serializer);
 			} else {
 				for (Object element : collection)
-					kryo.writeObject(output, element, serializer);
+					kryo.writeClassAndObject(output, element);
 			}
-		} else {
-			for (Object element : collection)
-				kryo.writeClassAndObject(output, element);
 		}
-	}
-
-	private CollectionInfo collectInfo (Collection collection) {
-		CollectionInfo info = new CollectionInfo();
-		Iterator it = collection.iterator();
-		while(it.hasNext() && info.add(it.next()));
-		return info;
 	}
 
 	/** Used by {@link #read(Kryo, Input, Class)} to create the new object. This can be overridden to customize object creation, eg
@@ -168,21 +128,9 @@ public class NewCollectionSerializer extends Serializer<Collection> {
 		Collection collection = create(kryo, input, type);
 		kryo.reference(collection);
 		int length = input.readVarInt(true);
-		if(length>=0)
-			return readGeneric(kryo, input, type, collection, length);
-		else
-			return readSpecial(kryo, input, type, collection, -length);
-	}
-
-	private Collection readSpecial (Kryo kryo, Input input, Class<Collection> type, Collection collection, int length) {
+		CollectionInformation info = new CollectionInformation(input.readByte());
 		
-		//read metadata
-		byte meta=input.readByte();
-		boolean allNull = (meta & 1) == 1;
-		boolean anyNull = (meta & 2) == 2;
-		boolean singularClass = (meta & 4) == 4;
-		
-		if(allNull)
+		if(info.isAllNull())
 			collection.addAll(Arrays.asList(new Object[length]));
 		else {
 			if (collection instanceof ArrayList) ((ArrayList)collection).ensureCapacity(length);
@@ -195,13 +143,13 @@ public class NewCollectionSerializer extends Serializer<Collection> {
 				}
 				genericType = null;
 			}
-			if(serializer==null && singularClass) {
+			if(serializer==null && !info.isMultipleClasses()) {
 				Registration elements = kryo.readClass(input);
 				elementClass = elements.getType();
 				serializer = elements.getSerializer();
 			}
 			if (serializer != null) {
-				if (elementsCanBeNull && anyNull) {
+				if (elementsCanBeNull && info.isAnyNull()) {
 					for (int i = 0; i < length; i++)
 						collection.add(kryo.readObjectOrNull(input, elementClass, serializer));
 				} else {
@@ -216,32 +164,6 @@ public class NewCollectionSerializer extends Serializer<Collection> {
 		return collection;
 	}
 	
-	private Collection readGeneric (Kryo kryo, Input input, Class<Collection> type, Collection collection, int length) {
-		if (collection instanceof ArrayList) ((ArrayList)collection).ensureCapacity(length);
-		Class elementClass = this.elementClass;
-		Serializer serializer = this.serializer;
-		if (genericType != null) {
-			if (serializer == null) {
-				elementClass = genericType;
-				serializer = kryo.getSerializer(genericType);
-			}
-			genericType = null;
-		}
-		if (serializer != null) {
-			if (elementsCanBeNull) {
-				for (int i = 0; i < length; i++)
-					collection.add(kryo.readObjectOrNull(input, elementClass, serializer));
-			} else {
-				for (int i = 0; i < length; i++)
-					collection.add(kryo.readObject(input, elementClass, serializer));
-			}
-		} else {
-			for (int i = 0; i < length; i++)
-				collection.add(kryo.readClassAndObject(input));
-		}
-		return collection;
-	}
-
 	/** Used by {@link #copy(Kryo, Collection)} to create the new object. This can be overridden to customize object creation, eg to
 	 * call a constructor with arguments. The default implementation uses {@link Kryo#newInstance(Class)}. */
 	protected Collection createCopy (Kryo kryo, Collection original) {
@@ -255,7 +177,7 @@ public class NewCollectionSerializer extends Serializer<Collection> {
 			copy.add(kryo.copy(element));
 		return copy;
 	}
-
+	
 	/**
 	 * Used to annotate fields that are collections with specific Kryo serializers
 	 * for their values.
@@ -284,29 +206,5 @@ public class NewCollectionSerializer extends Serializer<Collection> {
 	     * @return true, if elements can be null
 	     */
 	    boolean elementsCanBeNull() default true;
-	}
-	
-	private static final class CollectionInfo {
-		Class<?> singularClass=null;
-		boolean allNull=true;
-		boolean anyNull=false;
-		
-		public CollectionInfo () {}
-
-		public boolean add(Object o) {
-			if(o == null)
-				anyNull = true;
-			else {
-				if(!o.getClass().equals(singularClass)) {
-					if(allNull)
-						singularClass=o.getClass();
-					else
-						singularClass=null;
-				}
-				allNull=false;
-			}
-			
-			return allNull || singularClass!=null;
-		}
 	}
 }
